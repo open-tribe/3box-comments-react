@@ -1,9 +1,8 @@
 import React, { Component } from 'react';
-import makeBlockie from 'ethereum-blockies-base64';
 import SVG from 'react-inlinesvg';
 import PropTypes from 'prop-types';
 
-import { shortenEthAddr, checkIsMobileDevice, encodeMessage } from '../utils';
+import { checkIsMobileDevice, encodeMessage } from '../utils';
 
 import ArrowUp from '../assets/ArrowUp.svg';
 import ArrowDown from '../assets/ArrowDown.svg';
@@ -14,7 +13,6 @@ class Vote extends Component {
     super(props);
     this.state = {
       user: '',
-      comment: '',
       time: '',
       disableVote: true,
       postLoading: false,
@@ -44,7 +42,6 @@ class Vote extends Component {
     const myVotes = votes.filter(v => {
       const profile = profiles[v.author];
       const voterAddr = profile && profile.ethAddr.toLowerCase();
-      // console.log("my vote", voterAddr, currentUserAddrNormalized);
       return voterAddr === currentUserAddrNormalized
     });
     return myVotes && myVotes.length > 0 ? myVotes[0] : null;
@@ -62,7 +59,7 @@ class Vote extends Component {
       parentId
     } = this.props;
 
-    const { comment, disableVote, isMobile } = this.state;
+    const { disableVote, isMobile } = this.state;
     const noWeb3 = (!ethereum || !Object.entries(ethereum).length) && !loginFunction;
 
     if (noWeb3) return;
@@ -77,17 +74,17 @@ class Vote extends Component {
       const myVote = this.getMyVote();
       if (myVote) {
         if (myVote.message.data === direction) {
-          console.log("unvote", direction);
-          await thread.deletePost(myVote.postId);
+          // undo vote
+          await this.props.thread.deletePost(myVote.postId);
         } else {
-          console.log("revote")
+          // re-vote
           await this.props.thread.deletePost(myVote.postId);
           const message = encodeMessage("vote", direction, parentId);
-          await thread.post(message);
+          await this.props.thread.post(message);
         }
       } else {
         const message = encodeMessage("vote", direction, parentId);
-        await thread.post(message);
+        await this.props.thread.post(message);
       }
       await updateComments();
       this.setState({ postLoading: false });
@@ -97,23 +94,7 @@ class Vote extends Component {
   }
 
   render() {
-    const {
-      comment,
-      postLoading,
-      showLoggedInAs,
-      isMobile,
-    } = this.state;
-
-    const {
-      currentUser3BoxProfile,
-      currentUserAddr,
-      box,
-      ethereum,
-      loginFunction,
-      openBox,
-      isLoading3Box,
-      votes
-    } = this.props;
+    const { votes } = this.props;
 
     const count = votes.reduce((sum, v) => (sum + v.message.data), 0);
 
@@ -159,7 +140,6 @@ Vote.propTypes = {
   currentUserAddr: PropTypes.string,
   loginFunction: PropTypes.func,
   isLoading3Box: PropTypes.bool,
-
   updateComments: PropTypes.func.isRequired,
   openBox: PropTypes.func.isRequired,
   joinThread: PropTypes.func.isRequired,

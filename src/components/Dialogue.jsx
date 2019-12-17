@@ -78,7 +78,6 @@ class Dialogue extends Component {
                 ethereum={ethereum}
                 isLoading3Box={isLoading3Box}
                 updateComments={updateComments}
-                showCommentCount={showCommentCount}
               />
             )
           })}
@@ -120,8 +119,8 @@ Dialogue.propTypes = {
   isLoading3Box: PropTypes.bool,
   updateComments: PropTypes.func.isRequired,
 
-  onMouseOver: PropTypes.object,
-  onMouseLeave: PropTypes.object,
+  onMouseOver: PropTypes.func,
+  onMouseLeave: PropTypes.func,
 };
 
 Dialogue.defaultProps = {

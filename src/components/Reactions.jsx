@@ -1,6 +1,4 @@
 import React, { Component } from 'react';
-import makeBlockie from 'ethereum-blockies-base64';
-import SVG from 'react-inlinesvg';
 import PropTypes from 'prop-types';
 
 import { shortenEthAddr, checkIsMobileDevice, encodeMessage, aggregateReactions } from '../utils';
@@ -16,14 +14,15 @@ class Reactions extends Component {
     super(props);
     this.state = {
       user: '',
-      comment: '',
       time: '',
       disableReaction: true,
       emojiPickerIsOpen: false,
       emojiFilter: '',
       postLoading: false,
+      hintText: null,
       isMobile: checkIsMobileDevice(),
     }
+    this.onHover = this.onHover.bind(this);
   }
 
   async componentDidMount() {
@@ -46,9 +45,7 @@ class Reactions extends Component {
     this.setState({ emojiPickerIsOpen: false });
   }
 
-
   _handleEmojiPicked = (emoji) => {
-    console.log("emoji picked", emoji);
     this.react(emoji);
     this.setState({ emojiPickerIsOpen: false });
   }
@@ -88,7 +85,6 @@ class Reactions extends Component {
     const myReactions = reactions.filter(r => {
       const profile = profiles[r.author];
       const reactionAddr = profile && profile.ethAddr.toLowerCase();
-      console.log("my reactions", reactionAddr, currentUserAddrNormalized);
       return reactionAddr === currentUserAddrNormalized
     });
     return myReactions;
@@ -106,7 +102,7 @@ class Reactions extends Component {
       parentId
     } = this.props;
 
-    const { comment, disableReaction, isMobile } = this.state;
+    const { disableReaction, isMobile } = this.state;
     const noWeb3 = (!ethereum || !Object.entries(ethereum).length) && !loginFunction;
 
     if (noWeb3) return;
@@ -122,17 +118,13 @@ class Reactions extends Component {
       const myReactions = this.getMyReactions();
       if (myReactions) {
         const reactions = aggregateReactions(myReactions);
-        console.log("my aggregated reactions", reactions);
         if (reactions[emoji]) {
           console.log("ignore because you already reacted with this emoji", emoji);
-
         } else {
-          console.log("react normally 1");
           const message = encodeMessage("reaction", emoji, parentId);
           await this.props.thread.post(message);
         }
       } else {
-        console.log("react normally 2");
         const message = encodeMessage("reaction", emoji, parentId);
         await this.props.thread.post(message);
       }
@@ -146,33 +138,45 @@ class Reactions extends Component {
   deleteReaction = async (reaction) => {
     const { thread } = this.props;
     try {
-      console.log("delete reaction", reaction, this);
       if (!Object.keys(thread).length) await joinThread();
-      await thread.deletePost(reaction.postId);
+      await this.props.thread.deletePost(reaction.postId);
     } catch (error) {
       console.error('There was an error deleting one reaction', error);
     }
   }
 
-  render() {
-    const {
-      comment,
-      postLoading,
-      showLoggedInAs,
-      isMobile,
-      emojiPickerIsOpen
-    } = this.state;
+  getAuthor = (reaction) => {
+    const { profiles } = this.props;
+    const profile = profiles[reaction.author];
+    return profile.name || shortenEthAddr(profile.ethAddr.toLowerCase());
+  }
 
-    const {
-      currentUser3BoxProfile,
-      currentUserAddr,
-      box,
-      ethereum,
-      loginFunction,
-      openBox,
-      isLoading3Box,
-      reactions
-    } = this.props;
+  onHover = (items) => {
+    if (items && items.length > 0) {
+      let users = "";
+      try {
+        if (items.length === 1) {
+          users = `${this.getAuthor(items[0])}`;
+        } else if (items.length === 2) {
+          users = `${this.getAuthor(items[0])} and ${this.getAuthor(items[1])}`;
+        } else {
+          users = `${this.getAuthor(items[0])}, ${this.getAuthor(items[1])} and others`;
+        }
+        const emoji = items[0].message.data;
+        const text = `${users} reacted with ${emoji} emoji`;
+        this.setState({ hintText: text });
+      } catch(error) {
+        console.log("There was an error when setting hint", error);
+      }
+    } else {
+      this.setState({ hintText: null});
+    }
+
+  }
+
+  render() {
+    const { emojiPickerIsOpen } = this.state;
+    const { reactions } = this.props;
 
     const myReactions = this.getMyReactions();
     let reactionsSummary = {}, myReactionsSummary = {};
@@ -182,19 +186,19 @@ class Reactions extends Component {
     if (myReactions.length > 0) {
       myReactionsSummary = aggregateReactions(myReactions);
     }
-    console.log("render reactions", reactionsSummary, myReactionsSummary);
 
     return (
       <div className="reactions">
         {reactions && reactions.length > 0 && (
-          <div className="emoji-bar">{
+          <div className="emoji-bar" onMouseLeave={() => (this.onHover(null))}>{
             Object.keys(reactionsSummary).map(emoji => {
               const count = reactionsSummary[emoji].count;
+              const items = reactionsSummary[emoji].items;
               if (myReactionsSummary[emoji]) {
                 const r = myReactionsSummary[emoji].items[0];
-                return <div className="emoji-item has_reacted" onClick={()=>(this.deleteReaction(r))}>{emoji} {count}</div>;
+                return <div className="emoji-item has_reacted" key={emoji} onClick={() => (this.deleteReaction(r))} onMouseEnter={() => (this.onHover(items))}>{emoji} {count}</div>;
               } else {
-                return <div className="emoji-item" onClick={() => (this.react(emoji))}>{emoji} {count}</div>;
+                return <div className="emoji-item" key={emoji} onClick={() => (this.react(emoji))} onMouseEnter={() => (this.onHover(items))}>{emoji} {count}</div>;
               }
 
             })
@@ -205,6 +209,9 @@ class Reactions extends Component {
           isActive={emojiPickerIsOpen}
           tooltip={this._renderEmojiPopup()}
         />
+        <p className={`hint ${this.state.hintText ? 'visible' : ''}`}>
+          {this.state.hintText}
+        </p>
       </div>
     );
   }
@@ -220,7 +227,6 @@ Reactions.propTypes = {
   currentUserAddr: PropTypes.string,
   loginFunction: PropTypes.func,
   isLoading3Box: PropTypes.bool,
-
   updateComments: PropTypes.func.isRequired,
   openBox: PropTypes.func.isRequired,
   joinThread: PropTypes.func.isRequired,
